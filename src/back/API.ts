@@ -94,7 +94,7 @@ async function Post(path: string, body: any): Promise<any> {
 //#region PRODUCTS
 export async function getProducts(): Promise<Item[]> {
     let data = await Get("products")
-    console.log(data)
+
     let items: Item[] = []
 
     for (let i = 0; i < data.length; i++) {
@@ -105,21 +105,35 @@ export async function getProducts(): Promise<Item[]> {
 
         items.push(item)
     }
-
+    console.log(items)
     return items
 }
 
-export async function getProduct(id: string) {
-    return await Get("products/" + id)
+export async function getProduct(id: string): Promise<Item> {
+    let product = await Get("products/" + id)
+    let images = await getProductImages(id);
+
+    let item = new Item(product.reference, product.name, product.desc, product.price, product.quantity, images);
+
+    return item;
 }
 
-export async function getProductsCount() {
+export async function getProductsCount(): Promise<number> {
     let products = await Get("products")
     return products.length;
 }
 
 export async function getProductImages(id: string) {
-    return await Get("products/" + id + "/images")
+    let images = await Get("products/" + id + "/images")
+
+    if (images === null || images.length === 0) {
+        images = ["https://ionicframework.com/docs/img/demos/card-media.png"];
+    }
+    else {
+        images = images.map((el: any) => el.name);
+    }
+
+    return images;
 }
 
 //#endregion PRODUCTS
@@ -171,14 +185,56 @@ export async function Login(login: string, password: string): Promise<boolean> {
     localStorage.setItem("user", JSON.stringify(user));
     return true;
 }
-export async function deleteUser(id: number) {
-    return await fetch(`users/${id}`, {
+export async function deleteUser(id: string) {
+    let options = {
         method: "DELETE",
         headers: {
             "Content-Type": "application/json; charset=UTF-8",
             "Authorization": import.meta.env.VITE_API_KEY
         }
-    });
+    };
+
+    try {
+        const res = await fetch(primaryAddress + "users/" + id, options);
+
+        if (res.status === 401) {
+            throw new Error("Unauthorized access. Please check your API key.");
+        }
+        else if (!res.ok) throw new Error("Primary API failed: " + res.status);
+
+        try {
+            return await res.json();
+        } catch (jsonErr) {
+            throw new Error("Primary API invalid JSON");
+        }
+    } catch (e) {
+        console.warn("Primary API failed, trying fallback:", e);
+
+        const res = await fetch(fallbackAddress + "users/" + id, options);
+
+        if (res.status === 401) {
+            throw new Error("Unauthorized access. Please check your API key.");
+        }
+        else if (!res.ok) throw new Error("Fallback API failed: " + res.status);
+
+        try {
+            return await res.json();
+        } catch (jsonErr) {
+            throw new Error("Fallback API invalid JSON");
+        }
+    }
+}
+
+export async function updateUser(id: number, userData: any) {
+    let options = {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json; charset=UTF-8",
+            "Authorization": import.meta.env.VITE_API_KEY
+        },
+        body: JSON.stringify(userData)
+    };
+
 }
 
 //#endregion USER
